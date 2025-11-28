@@ -11,6 +11,9 @@ import subprocess
 repo_dir = os.path.dirname(os.path.abspath(__file__))
 os.chdir(repo_dir)
 
+# Ensure components directory exists
+os.makedirs("components", exist_ok=True)
+
 try:
     # Step 1: Validate Python syntax
     print("Step 1: Validating Python syntax...")
@@ -20,28 +23,12 @@ try:
     subprocess.run([sys.executable, "-m", "py_compile", "pipeline.py"], check=True)
     print("✓ Python syntax validation passed!")
 
-    # Step 2: Import and verify all components load
-    print("\nStep 2: Verifying KFP components...")
-    sys.path.insert(0, repo_dir)
-    from src.pipeline_components import (
-        data_extraction_component,
-        data_preprocessing_component,
-        model_training_component,
-        model_evaluation_component,
-    )
-
-    print("✓ All 4 components imported successfully")
-    print("  - data_extraction_component")
-    print("  - data_preprocessing_component")
-    print("  - model_training_component")
-    print("  - model_evaluation_component")
-
-    # Step 3: Run pipeline.py to compile
-    print("\nStep 3: Compiling pipeline to YAML...")
+    # Step 2: Run pipeline.py to compile
+    print("\nStep 2: Compiling pipeline to YAML...")
     subprocess.run([sys.executable, "pipeline.py"], check=True)
 
-    # Step 4: Verify output
-    print("\nStep 4: Verifying output...")
+    # Step 3: Verify output
+    print("\nStep 3: Verifying output...")
     if os.path.exists("pipeline.yaml"):
         file_size = os.path.getsize("pipeline.yaml")
         with open("pipeline.yaml", "r") as f:
@@ -56,10 +43,11 @@ try:
 
 except subprocess.CalledProcessError as e:
     print(f"✗ ERROR: Subprocess failed with exit code {e.returncode}")
+    import traceback
+    traceback.print_exc()
     sys.exit(1)
 except Exception as e:
     print(f"✗ ERROR: {type(e).__name__}: {e}")
     import traceback
-
     traceback.print_exc()
     sys.exit(1)

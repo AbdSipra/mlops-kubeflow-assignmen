@@ -63,21 +63,6 @@ jobs:
       - name: "Stage 2: Compile Pipeline to YAML"
         run: python compile_pipeline.py
       
-      - name: "Stage 2: Pipeline Compilation - Verify pipeline.yaml"
-        run: |
-          echo "Verifying pipeline.yaml was generated..."
-          if [ -f pipeline.yaml ]; then
-            echo "✓ pipeline.yaml generated successfully"
-            echo "File size: $(wc -c < pipeline.yaml) bytes"
-            echo "File lines: $(wc -l < pipeline.yaml) lines"
-            echo ""
-            echo "First 20 lines of pipeline.yaml:"
-            head -20 pipeline.yaml
-          else
-            echo "✗ ERROR: pipeline.yaml was not generated!"
-            exit 1
-          fi
-      
       # ============================================
       # STAGE 3: Validation & Testing
       # ============================================
@@ -85,8 +70,7 @@ jobs:
         run: |
           if [ -f pipeline.yaml ]; then
             echo "✓ pipeline.yaml verified"
-            echo "File size: $(wc -c < pipeline.yaml) bytes"
-            echo "Line count: $(wc -l < pipeline.yaml) lines"
+            wc -l pipeline.yaml
           else
             echo "✗ ERROR: pipeline.yaml not found!"
             exit 1
