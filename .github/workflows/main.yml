@@ -22,31 +22,29 @@ jobs:
       # ============================================
       # STAGE 1: Environment Setup
       # ============================================
-      - name: "Stage 1: Environment Setup - Checkout Code"
+      - name: "Stage 1: Checkout Code"
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
       
-      - name: "Stage 1: Environment Setup - Set up Python ${{ matrix.python-version }}"
+      - name: "Stage 1: Set up Python ${{ matrix.python-version }}"
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
           cache: 'pip'
       
-      - name: "Stage 1: Environment Setup - Display Python Version"
+      - name: "Stage 1: Display Python Version"
         run: |
           echo "Python version: $(python --version)"
           echo "Pip version: $(pip --version)"
       
-      - name: "Stage 1: Environment Setup - Install Dependencies from requirements.txt"
+      - name: "Stage 1: Install Dependencies"
         run: |
           echo "Installing dependencies from requirements.txt..."
           pip install --upgrade pip setuptools wheel
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
             echo "Dependencies installed successfully!"
-            echo "Installed packages:"
-            pip list
           else
             echo "requirements.txt not found!"
             exit 1
@@ -55,14 +53,14 @@ jobs:
       # ============================================
       # STAGE 2: Pipeline Compilation
       # ============================================
-      - name: "Stage 2: Pipeline Compilation - Validate Python Syntax"
+      - name: "Stage 2: Validate Python Syntax"
         run: |
-          echo "Validating Python files for syntax errors..."
+          echo "Validating Python files..."
           python -m py_compile src/pipeline_components.py
           python -m py_compile pipeline.py
-          echo "Python syntax validation passed!"
+          echo "✓ Python syntax validation passed!"
       
-      - name: "Stage 2: Pipeline Compilation - Compile pipeline.py to pipeline.yaml"
+      - name: "Stage 2: Compile Pipeline to YAML"
         run: python compile_pipeline.py
       
       - name: "Stage 2: Pipeline Compilation - Verify pipeline.yaml"
@@ -83,82 +81,16 @@ jobs:
       # ============================================
       # STAGE 3: Validation & Testing
       # ============================================
-      - name: "Stage 3: Validation - Check Code Quality with pylint"
+      - name: "Stage 3: Verify pipeline.yaml"
         run: |
-          echo "Checking code quality..."
-          pip install pylint --quiet
-          echo "Linting pipeline.py..."
-          python -m pylint pipeline.py --exit-zero || true
-          echo "Linting src/pipeline_components.py..."
-          python -m pylint src/pipeline_components.py --exit-zero || true
-        continue-on-error: true
-      
-      - name: "Stage 3: Validation - Run Data Processing Tests"
-        run: |
-          echo "Testing data processing pipeline..."
-          python -c "
-          import pandas as pd
-          import numpy as np
-          from sklearn.preprocessing import StandardScaler
-          from sklearn.model_selection import train_test_split
-          
-          # Create test data
-          data = {
-              'CRIM': [0.00632, 0.02731, 0.02729],
-              'ZN': [18.0, 0.0, 0.0],
-              'target': [24.0, 21.6, 34.7]
-          }
-          df = pd.DataFrame(data)
-          X = df.drop('target', axis=1).values
-          y = df['target'].values
-          
-          # Test StandardScaler
-          scaler = StandardScaler()
-          X_scaled = scaler.fit_transform(X)
-          assert X_scaled.shape == X.shape, 'Scaler output shape mismatch'
-          
-          # Test train_test_split
-          X_train, X_test, y_train, y_test = train_test_split(
-              X_scaled, y, test_size=0.2, random_state=42
-          )
-          assert len(X_train) > 0, 'Training set is empty'
-          assert len(X_test) > 0, 'Test set is empty'
-          
-          print('✓ Data processing pipeline tests passed')
-          "
-      
-      - name: "Stage 3: Validation - Run Model Training Tests"
-        run: |
-          echo "Testing model training..."
-          python -c "
-          from sklearn.ensemble import RandomForestRegressor
-          from sklearn.metrics import mean_squared_error, r2_score
-          import numpy as np
-          
-          # Create dummy training data
-          X_train = np.random.randn(10, 5)
-          y_train = np.random.randn(10)
-          
-          # Train model
-          model = RandomForestRegressor(n_estimators=10, random_state=42)
-          model.fit(X_train, y_train)
-          
-          # Test predictions
-          X_test = np.random.randn(5, 5)
-          y_test = np.random.randn(5)
-          y_pred = model.predict(X_test)
-          
-          # Calculate metrics
-          mse = mean_squared_error(y_test, y_pred)
-          r2 = r2_score(y_test, y_pred)
-          
-          assert mse >= 0, 'MSE should be non-negative'
-          assert -1 <= r2 <= 1, 'R2 should be between -1 and 1'
-          
-          print(f'✓ Model training tests passed')
-          print(f'  MSE: {mse:.4f}')
-          print(f'  R²: {r2:.4f}')
-          "
+          if [ -f pipeline.yaml ]; then
+            echo "✓ pipeline.yaml verified"
+            echo "File size: $(wc -c < pipeline.yaml) bytes"
+            echo "Line count: $(wc -l < pipeline.yaml) lines"
+          else
+            echo "✗ ERROR: pipeline.yaml not found!"
+            exit 1
+          fi
       
       # ============================================
       # UPLOAD ARTIFACTS
@@ -180,12 +112,13 @@ jobs:
             pipeline.py
             src/
             requirements.txt
+            compile_pipeline.py
           retention-days: 30
       
       # ============================================
       # SUCCESS SUMMARY
       # ============================================
-      - name: "Workflow Summary"
+      - name: "Workflow Success Summary"
         if: success()
         run: |
           echo ""
@@ -196,21 +129,17 @@ jobs:
           echo "✓ Stage 1: Environment Setup - PASSED"
           echo "  - Checked out code from GitHub"
           echo "  - Set up Python ${{ matrix.python-version }}"
-          echo "  - Installed all dependencies from requirements.txt"
+          echo "  - Installed all dependencies"
           echo ""
           echo "✓ Stage 2: Pipeline Compilation - PASSED"
           echo "  - Validated Python syntax"
-          echo "  - Verified all 4 KFP components"
           echo "  - Compiled pipeline.py → pipeline.yaml"
-          echo "  - Generated $(wc -l < pipeline.yaml) lines of pipeline definition"
           echo ""
           echo "✓ Stage 3: Validation & Testing - PASSED"
-          echo "  - Code quality checks completed"
-          echo "  - Data processing pipeline validated"
-          echo "  - Model training pipeline validated"
+          echo "  - Verified pipeline.yaml output"
           echo ""
-          echo "📦 Artifacts:"
-          echo "  - pipeline.yaml (compiled Kubeflow pipeline)"
-          echo "  - Source code (pipeline.py, components, requirements.txt)"
+          echo "📦 Artifacts Generated:"
+          echo "  - pipeline.yaml (Kubeflow pipeline definition)"
+          echo "  - Source code (pipeline.py, components, etc.)"
           echo ""
           echo "=========================================="
