@@ -1,0 +1,110 @@
+# PIPELINE DEFINITION
+# Name: data-extraction-component
+# Inputs:
+#    dvc_data_path: str
+#    dvc_repo_url: str
+#    output_csv_path: str
+# Outputs:
+#    Output: str
+components:
+  comp-data-extraction-component:
+    executorLabel: exec-data-extraction-component
+    inputDefinitions:
+      parameters:
+        dvc_data_path:
+          parameterType: STRING
+        dvc_repo_url:
+          parameterType: STRING
+        output_csv_path:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-data-extraction-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - data_extraction_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \ 'numpy==2.2.3' 'scikit-learn==1.6.1' 'joblib==1.4.2'  &&  python3 -m pip\
+          \ install --quiet --no-warn-script-location 'kfp==2.15.1' '--no-deps' 'typing-extensions>=3.7.4,<5;\
+          \ python_version<\"3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef data_extraction_component(\n    dvc_repo_url: str,\n    dvc_data_path:\
+          \ str,\n    output_csv_path: str,\n) -> str:\n    \"\"\"Extract/load the\
+          \ dataset (simplified version without DVC).\"\"\"\n    import os\n    import\
+          \ pandas as pd\n\n    os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)\n\
+          \n    # Create sample Boston Housing dataset directly\n    data = {\n  \
+          \      \"CRIM\": [0.00632, 0.02731, 0.02729, 0.03237, 0.06905],\n      \
+          \  \"ZN\": [18.0, 0.0, 0.0, 0.0, 0.0],\n        \"INDUS\": [2.31, 7.07,\
+          \ 7.07, 2.18, 2.18],\n        \"CHAS\": [0, 0, 0, 0, 0],\n        \"NOX\"\
+          : [0.538, 0.469, 0.469, 0.458, 0.458],\n        \"RM\": [6.575, 6.421, 7.185,\
+          \ 6.998, 7.147],\n        \"AGE\": [65.2, 78.9, 61.1, 45.8, 54.2],\n   \
+          \     \"DIS\": [4.09, 4.9671, 4.9671, 6.0622, 6.0622],\n        \"RAD\"\
+          : [1, 2, 2, 3, 3],\n        \"TAX\": [296, 242, 242, 222, 222],\n      \
+          \  \"PTRATIO\": [15.3, 17.8, 17.8, 18.7, 18.7],\n        \"B\": [396.9,\
+          \ 396.9, 392.83, 394.63, 396.9],\n        \"LSTAT\": [4.98, 9.14, 4.03,\
+          \ 2.94, 5.33],\n        \"MEDV\": [24.0, 21.6, 34.7, 33.4, 36.2],\n    }\n\
+          \n    df = pd.DataFrame(data)\n    df.to_csv(output_csv_path, index=False)\n\
+          \n    return output_csv_path\n\n"
+        image: python:3.11
+pipelineInfo:
+  name: data-extraction-component
+root:
+  dag:
+    outputs:
+      parameters:
+        Output:
+          valueFromParameter:
+            outputParameterKey: Output
+            producerSubtask: data-extraction-component
+    tasks:
+      data-extraction-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-data-extraction-component
+        inputs:
+          parameters:
+            dvc_data_path:
+              componentInputParameter: dvc_data_path
+            dvc_repo_url:
+              componentInputParameter: dvc_repo_url
+            output_csv_path:
+              componentInputParameter: output_csv_path
+        taskInfo:
+          name: data-extraction-component
+  inputDefinitions:
+    parameters:
+      dvc_data_path:
+        parameterType: STRING
+      dvc_repo_url:
+        parameterType: STRING
+      output_csv_path:
+        parameterType: STRING
+  outputDefinitions:
+    parameters:
+      Output:
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.15.1

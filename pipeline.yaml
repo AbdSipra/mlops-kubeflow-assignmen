@@ -1,0 +1,354 @@
+# PIPELINE DEFINITION
+# Name: boston-housing-ml-pipeline
+# Description: End-to-end ML pipeline: data extraction -> preprocessing -> training -> evaluation
+# Inputs:
+#    dvc_data_path: str [Default: 'data/raw_data.csv']
+#    dvc_repo_url: str [Default: 'https://github.com/AbdSipra/mlops-kubeflow-assignmen']
+components:
+  comp-data-extraction-component:
+    executorLabel: exec-data-extraction-component
+    inputDefinitions:
+      parameters:
+        dvc_data_path:
+          parameterType: STRING
+        dvc_repo_url:
+          parameterType: STRING
+        output_csv_path:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+  comp-data-preprocessing-component:
+    executorLabel: exec-data-preprocessing-component
+    inputDefinitions:
+      parameters:
+        random_state:
+          defaultValue: 42.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+        raw_csv_path:
+          parameterType: STRING
+        test_csv_path:
+          parameterType: STRING
+        test_size:
+          defaultValue: 0.2
+          isOptional: true
+          parameterType: NUMBER_DOUBLE
+        train_csv_path:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+  comp-model-evaluation-component:
+    executorLabel: exec-model-evaluation-component
+    inputDefinitions:
+      parameters:
+        metrics_output_path:
+          parameterType: STRING
+        model_path:
+          parameterType: STRING
+        test_csv_path:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+  comp-model-training-component:
+    executorLabel: exec-model-training-component
+    inputDefinitions:
+      parameters:
+        model_output_path:
+          parameterType: STRING
+        n_estimators:
+          defaultValue: 100.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+        random_state:
+          defaultValue: 42.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+        train_csv_path:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-data-extraction-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - data_extraction_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \ 'numpy==2.2.3' 'scikit-learn==1.6.1' 'joblib==1.4.2'  &&  python3 -m pip\
+          \ install --quiet --no-warn-script-location 'kfp==2.15.1' '--no-deps' 'typing-extensions>=3.7.4,<5;\
+          \ python_version<\"3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef data_extraction_component(\n    dvc_repo_url: str,\n    dvc_data_path:\
+          \ str,\n    output_csv_path: str,\n) -> str:\n    \"\"\"Extract/load the\
+          \ dataset (simplified version without DVC).\"\"\"\n    import os\n    import\
+          \ pandas as pd\n\n    os.makedirs(os.path.dirname(output_csv_path), exist_ok=True)\n\
+          \n    # Create sample Boston Housing dataset directly\n    data = {\n  \
+          \      \"CRIM\": [0.00632, 0.02731, 0.02729, 0.03237, 0.06905],\n      \
+          \  \"ZN\": [18.0, 0.0, 0.0, 0.0, 0.0],\n        \"INDUS\": [2.31, 7.07,\
+          \ 7.07, 2.18, 2.18],\n        \"CHAS\": [0, 0, 0, 0, 0],\n        \"NOX\"\
+          : [0.538, 0.469, 0.469, 0.458, 0.458],\n        \"RM\": [6.575, 6.421, 7.185,\
+          \ 6.998, 7.147],\n        \"AGE\": [65.2, 78.9, 61.1, 45.8, 54.2],\n   \
+          \     \"DIS\": [4.09, 4.9671, 4.9671, 6.0622, 6.0622],\n        \"RAD\"\
+          : [1, 2, 2, 3, 3],\n        \"TAX\": [296, 242, 242, 222, 222],\n      \
+          \  \"PTRATIO\": [15.3, 17.8, 17.8, 18.7, 18.7],\n        \"B\": [396.9,\
+          \ 396.9, 392.83, 394.63, 396.9],\n        \"LSTAT\": [4.98, 9.14, 4.03,\
+          \ 2.94, 5.33],\n        \"MEDV\": [24.0, 21.6, 34.7, 33.4, 36.2],\n    }\n\
+          \n    df = pd.DataFrame(data)\n    df.to_csv(output_csv_path, index=False)\n\
+          \n    return output_csv_path\n\n"
+        image: python:3.11
+    exec-data-preprocessing-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - data_preprocessing_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \ 'numpy==2.2.3' 'scikit-learn==1.6.1' 'joblib==1.4.2'  &&  python3 -m pip\
+          \ install --quiet --no-warn-script-location 'kfp==2.15.1' '--no-deps' 'typing-extensions>=3.7.4,<5;\
+          \ python_version<\"3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef data_preprocessing_component(\n    raw_csv_path: str,\n    train_csv_path:\
+          \ str,\n    test_csv_path: str,\n    test_size: float = 0.2,\n    random_state:\
+          \ int = 42,\n) -> str:\n    \"\"\"Clean data, scale features, and create\
+          \ train/test splits.\"\"\"\n    import os\n    import pandas as pd\n   \
+          \ import numpy as np\n    from sklearn.preprocessing import StandardScaler\n\
+          \    from sklearn.model_selection import train_test_split\n\n    os.makedirs(os.path.dirname(train_csv_path),\
+          \ exist_ok=True)\n\n    df = pd.read_csv(raw_csv_path)\n    X = df.drop(\"\
+          MEDV\", axis=1).values\n    y = df[\"MEDV\"].values\n\n    scaler = StandardScaler()\n\
+          \    X_scaled = scaler.fit_transform(X)\n\n    X_train, X_test, y_train,\
+          \ y_test = train_test_split(\n        X_scaled, y, test_size=test_size,\
+          \ random_state=random_state\n    )\n\n    columns = df.drop(\"MEDV\", axis=1).columns.tolist()\n\
+          \    train_arr = np.hstack((X_train, y_train.reshape(-1, 1)))\n    test_arr\
+          \ = np.hstack((X_test, y_test.reshape(-1, 1)))\n    columns.append(\"MEDV\"\
+          )\n\n    train_df = pd.DataFrame(train_arr, columns=columns)\n    test_df\
+          \ = pd.DataFrame(test_arr, columns=columns)\n\n    train_df.to_csv(train_csv_path,\
+          \ index=False)\n    test_df.to_csv(test_csv_path, index=False)\n\n    return\
+          \ train_csv_path\n\n"
+        image: python:3.11
+    exec-model-evaluation-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - model_evaluation_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \ 'numpy==2.2.3' 'scikit-learn==1.6.1' 'joblib==1.4.2'  &&  python3 -m pip\
+          \ install --quiet --no-warn-script-location 'kfp==2.15.1' '--no-deps' 'typing-extensions>=3.7.4,<5;\
+          \ python_version<\"3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef model_evaluation_component(\n    model_path: str,\n    test_csv_path:\
+          \ str,\n    metrics_output_path: str,\n) -> str:\n    \"\"\"Evaluate the\
+          \ trained model on the test set and save metrics.\"\"\"\n    import os\n\
+          \    import json\n    import pandas as pd\n    import joblib\n    from sklearn.metrics\
+          \ import mean_squared_error, r2_score\n\n    os.makedirs(os.path.dirname(metrics_output_path),\
+          \ exist_ok=True)\n\n    df = pd.read_csv(test_csv_path)\n    X_test = df.drop(\"\
+          MEDV\", axis=1).values\n    y_test = df[\"MEDV\"].values\n\n    model =\
+          \ joblib.load(model_path)\n    y_pred = model.predict(X_test)\n\n    mse\
+          \ = mean_squared_error(y_test, y_pred)\n    r2 = r2_score(y_test, y_pred)\n\
+          \n    metrics = {\"MSE\": mse, \"R2\": r2}\n\n    with open(metrics_output_path,\
+          \ \"w\") as f:\n        json.dump(metrics, f, indent=2)\n\n    return metrics_output_path\n\
+          \n"
+        image: python:3.11
+    exec-model-training-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - model_training_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \ 'numpy==2.2.3' 'scikit-learn==1.6.1' 'joblib==1.4.2'  &&  python3 -m pip\
+          \ install --quiet --no-warn-script-location 'kfp==2.15.1' '--no-deps' 'typing-extensions>=3.7.4,<5;\
+          \ python_version<\"3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef model_training_component(\n    train_csv_path: str,\n    model_output_path:\
+          \ str,\n    n_estimators: int = 100,\n    random_state: int = 42,\n) ->\
+          \ str:\n    \"\"\"Train a Random Forest model on the training data.\"\"\"\
+          \n    import os\n    import pandas as pd\n    import joblib\n    from sklearn.ensemble\
+          \ import RandomForestRegressor\n\n    os.makedirs(os.path.dirname(model_output_path),\
+          \ exist_ok=True)\n\n    df = pd.read_csv(train_csv_path)\n    X_train =\
+          \ df.drop(\"MEDV\", axis=1).values\n    y_train = df[\"MEDV\"].values\n\n\
+          \    model = RandomForestRegressor(n_estimators=n_estimators, random_state=random_state)\n\
+          \    model.fit(X_train, y_train)\n\n    joblib.dump(model, model_output_path)\n\
+          \n    return model_output_path\n\n"
+        image: python:3.11
+pipelineInfo:
+  description: 'End-to-end ML pipeline: data extraction -> preprocessing -> training
+    -> evaluation'
+  name: boston-housing-ml-pipeline
+root:
+  dag:
+    tasks:
+      data-extraction-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-data-extraction-component
+        inputs:
+          parameters:
+            dvc_data_path:
+              componentInputParameter: dvc_data_path
+            dvc_repo_url:
+              componentInputParameter: dvc_repo_url
+            output_csv_path:
+              runtimeValue:
+                constant: /tmp/raw_data.csv
+        taskInfo:
+          name: Data Extraction
+      data-preprocessing-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-data-preprocessing-component
+        dependentTasks:
+        - data-extraction-component
+        inputs:
+          parameters:
+            random_state:
+              runtimeValue:
+                constant: 42.0
+            raw_csv_path:
+              taskOutputParameter:
+                outputParameterKey: Output
+                producerTask: data-extraction-component
+            test_csv_path:
+              runtimeValue:
+                constant: /tmp/test.csv
+            test_size:
+              runtimeValue:
+                constant: 0.2
+            train_csv_path:
+              runtimeValue:
+                constant: /tmp/train.csv
+        taskInfo:
+          name: Data Preprocessing
+      model-evaluation-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-model-evaluation-component
+        dependentTasks:
+        - model-training-component
+        inputs:
+          parameters:
+            metrics_output_path:
+              runtimeValue:
+                constant: /tmp/metrics.json
+            model_path:
+              taskOutputParameter:
+                outputParameterKey: Output
+                producerTask: model-training-component
+            test_csv_path:
+              runtimeValue:
+                constant: /tmp/test.csv
+        taskInfo:
+          name: Model Evaluation
+      model-training-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-model-training-component
+        dependentTasks:
+        - data-preprocessing-component
+        inputs:
+          parameters:
+            model_output_path:
+              runtimeValue:
+                constant: /tmp/model.joblib
+            n_estimators:
+              runtimeValue:
+                constant: 100.0
+            random_state:
+              runtimeValue:
+                constant: 42.0
+            train_csv_path:
+              taskOutputParameter:
+                outputParameterKey: Output
+                producerTask: data-preprocessing-component
+        taskInfo:
+          name: Model Training
+  inputDefinitions:
+    parameters:
+      dvc_data_path:
+        defaultValue: data/raw_data.csv
+        isOptional: true
+        parameterType: STRING
+      dvc_repo_url:
+        defaultValue: https://github.com/AbdSipra/mlops-kubeflow-assignmen
+        isOptional: true
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.15.1

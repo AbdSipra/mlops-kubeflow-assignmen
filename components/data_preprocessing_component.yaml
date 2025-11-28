@@ -1,0 +1,132 @@
+# PIPELINE DEFINITION
+# Name: data-preprocessing-component
+# Inputs:
+#    random_state: int [Default: 42.0]
+#    raw_csv_path: str
+#    test_csv_path: str
+#    test_size: float [Default: 0.2]
+#    train_csv_path: str
+# Outputs:
+#    Output: str
+components:
+  comp-data-preprocessing-component:
+    executorLabel: exec-data-preprocessing-component
+    inputDefinitions:
+      parameters:
+        random_state:
+          defaultValue: 42.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+        raw_csv_path:
+          parameterType: STRING
+        test_csv_path:
+          parameterType: STRING
+        test_size:
+          defaultValue: 0.2
+          isOptional: true
+          parameterType: NUMBER_DOUBLE
+        train_csv_path:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-data-preprocessing-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - data_preprocessing_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \ 'numpy==2.2.3' 'scikit-learn==1.6.1' 'joblib==1.4.2'  &&  python3 -m pip\
+          \ install --quiet --no-warn-script-location 'kfp==2.15.1' '--no-deps' 'typing-extensions>=3.7.4,<5;\
+          \ python_version<\"3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef data_preprocessing_component(\n    raw_csv_path: str,\n    train_csv_path:\
+          \ str,\n    test_csv_path: str,\n    test_size: float = 0.2,\n    random_state:\
+          \ int = 42,\n) -> str:\n    \"\"\"Clean data, scale features, and create\
+          \ train/test splits.\"\"\"\n    import os\n    import pandas as pd\n   \
+          \ import numpy as np\n    from sklearn.preprocessing import StandardScaler\n\
+          \    from sklearn.model_selection import train_test_split\n\n    os.makedirs(os.path.dirname(train_csv_path),\
+          \ exist_ok=True)\n\n    df = pd.read_csv(raw_csv_path)\n    X = df.drop(\"\
+          MEDV\", axis=1).values\n    y = df[\"MEDV\"].values\n\n    scaler = StandardScaler()\n\
+          \    X_scaled = scaler.fit_transform(X)\n\n    X_train, X_test, y_train,\
+          \ y_test = train_test_split(\n        X_scaled, y, test_size=test_size,\
+          \ random_state=random_state\n    )\n\n    columns = df.drop(\"MEDV\", axis=1).columns.tolist()\n\
+          \    train_arr = np.hstack((X_train, y_train.reshape(-1, 1)))\n    test_arr\
+          \ = np.hstack((X_test, y_test.reshape(-1, 1)))\n    columns.append(\"MEDV\"\
+          )\n\n    train_df = pd.DataFrame(train_arr, columns=columns)\n    test_df\
+          \ = pd.DataFrame(test_arr, columns=columns)\n\n    train_df.to_csv(train_csv_path,\
+          \ index=False)\n    test_df.to_csv(test_csv_path, index=False)\n\n    return\
+          \ train_csv_path\n\n"
+        image: python:3.11
+pipelineInfo:
+  name: data-preprocessing-component
+root:
+  dag:
+    outputs:
+      parameters:
+        Output:
+          valueFromParameter:
+            outputParameterKey: Output
+            producerSubtask: data-preprocessing-component
+    tasks:
+      data-preprocessing-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-data-preprocessing-component
+        inputs:
+          parameters:
+            random_state:
+              componentInputParameter: random_state
+            raw_csv_path:
+              componentInputParameter: raw_csv_path
+            test_csv_path:
+              componentInputParameter: test_csv_path
+            test_size:
+              componentInputParameter: test_size
+            train_csv_path:
+              componentInputParameter: train_csv_path
+        taskInfo:
+          name: data-preprocessing-component
+  inputDefinitions:
+    parameters:
+      random_state:
+        defaultValue: 42.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      raw_csv_path:
+        parameterType: STRING
+      test_csv_path:
+        parameterType: STRING
+      test_size:
+        defaultValue: 0.2
+        isOptional: true
+        parameterType: NUMBER_DOUBLE
+      train_csv_path:
+        parameterType: STRING
+  outputDefinitions:
+    parameters:
+      Output:
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.15.1

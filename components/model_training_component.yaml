@@ -1,0 +1,118 @@
+# PIPELINE DEFINITION
+# Name: model-training-component
+# Inputs:
+#    model_output_path: str
+#    n_estimators: int [Default: 100.0]
+#    random_state: int [Default: 42.0]
+#    train_csv_path: str
+# Outputs:
+#    Output: str
+components:
+  comp-model-training-component:
+    executorLabel: exec-model-training-component
+    inputDefinitions:
+      parameters:
+        model_output_path:
+          parameterType: STRING
+        n_estimators:
+          defaultValue: 100.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+        random_state:
+          defaultValue: 42.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+        train_csv_path:
+          parameterType: STRING
+    outputDefinitions:
+      parameters:
+        Output:
+          parameterType: STRING
+deploymentSpec:
+  executors:
+    exec-model-training-component:
+      container:
+        args:
+        - --executor_input
+        - '{{$}}'
+        - --function_to_execute
+        - model_training_component
+        command:
+        - sh
+        - -c
+        - "\nif ! [ -x \"$(command -v pip)\" ]; then\n    python3 -m ensurepip ||\
+          \ python3 -m ensurepip --user || apt-get install python3-pip\nfi\n\nPIP_DISABLE_PIP_VERSION_CHECK=1\
+          \ python3 -m pip install --quiet --no-warn-script-location 'pandas==2.2.3'\
+          \ 'numpy==2.2.3' 'scikit-learn==1.6.1' 'joblib==1.4.2'  &&  python3 -m pip\
+          \ install --quiet --no-warn-script-location 'kfp==2.15.1' '--no-deps' 'typing-extensions>=3.7.4,<5;\
+          \ python_version<\"3.9\"' && \"$0\" \"$@\"\n"
+        - sh
+        - -ec
+        - 'program_path=$(mktemp -d)
+
+
+          printf "%s" "$0" > "$program_path/ephemeral_component.py"
+
+          _KFP_RUNTIME=true python3 -m kfp.dsl.executor_main                         --component_module_path                         "$program_path/ephemeral_component.py"                         "$@"
+
+          '
+        - "\nimport kfp\nfrom kfp import dsl\nfrom kfp.dsl import *\nfrom typing import\
+          \ *\n\ndef model_training_component(\n    train_csv_path: str,\n    model_output_path:\
+          \ str,\n    n_estimators: int = 100,\n    random_state: int = 42,\n) ->\
+          \ str:\n    \"\"\"Train a Random Forest model on the training data.\"\"\"\
+          \n    import os\n    import pandas as pd\n    import joblib\n    from sklearn.ensemble\
+          \ import RandomForestRegressor\n\n    os.makedirs(os.path.dirname(model_output_path),\
+          \ exist_ok=True)\n\n    df = pd.read_csv(train_csv_path)\n    X_train =\
+          \ df.drop(\"MEDV\", axis=1).values\n    y_train = df[\"MEDV\"].values\n\n\
+          \    model = RandomForestRegressor(n_estimators=n_estimators, random_state=random_state)\n\
+          \    model.fit(X_train, y_train)\n\n    joblib.dump(model, model_output_path)\n\
+          \n    return model_output_path\n\n"
+        image: python:3.11
+pipelineInfo:
+  name: model-training-component
+root:
+  dag:
+    outputs:
+      parameters:
+        Output:
+          valueFromParameter:
+            outputParameterKey: Output
+            producerSubtask: model-training-component
+    tasks:
+      model-training-component:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-model-training-component
+        inputs:
+          parameters:
+            model_output_path:
+              componentInputParameter: model_output_path
+            n_estimators:
+              componentInputParameter: n_estimators
+            random_state:
+              componentInputParameter: random_state
+            train_csv_path:
+              componentInputParameter: train_csv_path
+        taskInfo:
+          name: model-training-component
+  inputDefinitions:
+    parameters:
+      model_output_path:
+        parameterType: STRING
+      n_estimators:
+        defaultValue: 100.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      random_state:
+        defaultValue: 42.0
+        isOptional: true
+        parameterType: NUMBER_INTEGER
+      train_csv_path:
+        parameterType: STRING
+  outputDefinitions:
+    parameters:
+      Output:
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.15.1

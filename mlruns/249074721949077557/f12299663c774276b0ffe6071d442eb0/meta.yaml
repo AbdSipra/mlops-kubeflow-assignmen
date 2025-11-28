@@ -1,0 +1,14 @@
+artifact_uri: file:///C:/Users/abdul/Desktop/mlops-kubeflow-assignmen/mlruns/249074721949077557/f12299663c774276b0ffe6071d442eb0/artifacts
+end_time: 1764267654132
+entry_point_name: ''
+experiment_id: '249074721949077557'
+lifecycle_stage: active
+run_id: f12299663c774276b0ffe6071d442eb0
+run_name: full_python_run
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1764267652508
+status: 3
+tags: []
+user_id: abdul

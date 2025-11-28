@@ -1,0 +1,6 @@
+artifact_location: file:///C:/Users/abdul/Desktop/mlops-kubeflow-assignmen/mlruns/249074721949077557
+creation_time: 1764176514763
+experiment_id: '249074721949077557'
+last_update_time: 1764176514763
+lifecycle_stage: active
+name: boston_housing_pipeline
